@@ -1,0 +1,8 @@
+{
+  "name": "Portaldot Eco-Sentinel",
+  "description": "Infrastructure audit tool for monitoring and stress-testing network sustainability with real-time energy waveforms and carbon estimation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
