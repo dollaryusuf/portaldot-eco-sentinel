@@ -58,18 +58,38 @@ export function Dashboard() {
     approvalCount,
     batchStatus, 
     govStatus,
+    isStressTesting,
+    isSpiking,
     carbonStats,
     batchHistory,
     fatigueData,
     auditResult,
     attestation,
     isAuditing,
-    oracleData
+    oracleData,
+    leaderboard,
+    proposals,
+    nodes,
+    systemLogs,
+    toast
   } = state;
 
   return (
     <div className="h-screen w-full bg-black text-white font-sans flex flex-col overflow-hidden selection:bg-emerald selection:text-black">
       
+      {/* Toast Notification */}
+      {toast && (
+        <motion.div 
+          initial={{ opacity: 0, y: 50, x: '-50%' }}
+          animate={{ opacity: 1, y: 0, x: '-50%' }}
+          exit={{ opacity: 0, y: 50, x: '-50%' }}
+          className="fixed bottom-32 left-1/2 z-[100] px-6 py-3 bg-emerald text-black border border-white font-black uppercase text-[10px] tracking-[0.2em] shadow-[0_20px_50px_rgba(0,255,157,0.3)] flex items-center gap-3"
+        >
+          <div className="w-2 h-2 bg-black animate-pulse" />
+          {toast}
+        </motion.div>
+      )}
+
       {/* Portaldot Header Navigation */}
       <nav className="h-20 flex justify-between items-center px-10 border-b border-portaldot shrink-0">
         <div className="flex items-center gap-6">
@@ -151,7 +171,7 @@ export function Dashboard() {
 
             {/* DePIN Oracle Connector UI */}
             {oracleData && (
-              <div className="mt-6 p-4 border border-[#1A1A1A] bg-black relative group">
+              <div className="mt-6 p-4 border border-[#1A1A1A] bg-[#050505] shadow-[0_0_20px_rgba(0,255,157,0.02)] relative group">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-2">
                     <Zap className="w-3 h-3 text-yellow-500" />
@@ -174,7 +194,7 @@ export function Dashboard() {
                 </div>
                 
                 <div className="mt-4 flex items-center justify-between">
-                  <span className="text-[7px] text-zinc-700 font-mono uppercase tracking-[0.05em]">Region: {oracleData.region} // Node: {oracleData.oracle_node}</span>
+                  <span className="text-[7px] text-zinc-700 font-mono uppercase tracking-[0.05em]">Region: {oracleData.region}</span>
                   <button 
                     onClick={() => actions.refreshOracle('europe-west2')}
                     className="text-[7px] text-emerald hover:underline font-bold uppercase"
@@ -184,6 +204,25 @@ export function Dashboard() {
                 </div>
               </div>
             )}
+
+            {/* Green Reputation Index Widget */}
+            <div className="mt-6 p-4 bg-[#050505] border border-[#1A1A1A] shadow-[0_0_15px_rgba(0,255,157,0.02)]">
+               <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-2">
+                 <div className="w-1 h-1 bg-emerald" />
+                 <span className="text-[8px] text-zinc-400 font-mono tracking-[0.4em] uppercase font-bold">Green Reputation Index</span>
+               </div>
+               <div className="space-y-2.5">
+                 {leaderboard.slice(0, 5).map((node, i) => (
+                    <div key={node.name} className="flex justify-between items-center group">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[7px] text-zinc-700 font-mono">0{i+1}</span>
+                        <span className="text-[9px] text-zinc-300 font-mono group-hover:text-white transition-colors">{node.name}</span>
+                      </div>
+                      <span className="text-[10px] text-[#00FF9D] font-black font-mono tracking-tighter">{node.efficiency}%</span>
+                    </div>
+                 ))}
+               </div>
+            </div>
 
             {/* Result Display */}
             <div className="mt-8 flex-1">
@@ -244,6 +283,55 @@ export function Dashboard() {
               )}
             </div>
 
+            {/* Hall of Green Leaderboard */}
+            <div className="mt-10 p-6 bg-[#050505] border border-[#1A1A1A] shadow-[0_0_20px_rgba(0,255,157,0.05)] flex-1 flex flex-col min-h-0">
+               <div className="flex items-center justify-between mb-6">
+                 <div className="flex items-center gap-2">
+                   <div className="w-1.5 h-1.5 rounded-full bg-emerald shadow-[0_0_8px_rgba(0,255,157,0.8)] animate-pulse" />
+                   <span className="text-[8px] text-emerald font-mono tracking-[0.4em] uppercase font-black">Top Green Nodes</span>
+                 </div>
+                 <span className="text-[7px] text-zinc-700 font-mono uppercase tracking-[0.3em]">Efficiency index</span>
+               </div>
+
+               <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                 <table className="w-full text-left font-mono text-[8px] uppercase tracking-tighter">
+                   <thead>
+                     <tr className="text-zinc-600 border-b border-white/5 bg-zinc-900/20">
+                       <th className="p-2 font-light">Rank</th>
+                       <th className="p-2 font-light">Validator / Cert</th>
+                       <th className="p-2 font-light text-right">E-Index</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-white/5">
+                     {leaderboard.map((entry) => (
+                       <tr key={entry.rank} className="group hover:bg-emerald/5 transition-colors">
+                         <td className="py-3 px-2 text-zinc-500">{entry.rank}</td>
+                         <td className="py-3 px-2">
+                           <div className="flex flex-col">
+                             <div className="flex items-center gap-2">
+                               <span className="text-zinc-200 group-hover:text-emerald font-bold">{entry.name}</span>
+                               {entry.status === 'OPTIMAL' && (
+                                 <div className="flex items-center gap-1 px-1 bg-emerald/10 border border-emerald/30">
+                                   <BadgeCheck className="w-2.5 h-2.5 text-emerald" />
+                                   <span className="text-[5px] text-emerald font-black">GREEN CERT</span>
+                                 </div>
+                               )}
+                             </div>
+                             <span className="text-[6px] text-zinc-700 font-mono tracking-widest">{entry.address}</span>
+                           </div>
+                         </td>
+                         <td className="py-3 px-2 text-right">
+                           <span className="font-black text-[10px] text-[#00FF9D]">
+                             {entry.efficiency}%
+                           </span>
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+
             {/* Carbon Footer Module */}
             <div className="mt-8 border-t border-portaldot pt-8">
                <div className="flex justify-between items-center mb-6">
@@ -277,23 +365,71 @@ export function Dashboard() {
         {/* Center Panel: Live Stream & Stress Test */}
         <section className="col-span-6 geometric-panel border-r border-portaldot flex flex-col p-0">
           
-          {/* Waveform Section */}
-          <div className="p-8 border-b border-portaldot h-[40%] flex flex-col">
-            <div className="flex justify-between items-start mb-8">
+          {/* Waveform Section with World Map Background */}
+          <div className="p-8 border-b border-portaldot h-[55%] flex flex-col relative overflow-hidden group">
+            {/* Minimalist World Grid & SVG Map Background Layer */}
+            <div className="absolute inset-0 opacity-10 pointer-events-none z-0">
+               <div className="w-full h-full" style={{ backgroundImage: 'radial-gradient(circle, #333 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+            </div>
+            
+            {/* Simplified World Path Background */}
+            <svg viewBox="0 0 1000 500" className="absolute inset-0 w-full h-full opacity-[0.03] fill-none stroke-[#00FF9D] stroke-[1] pointer-events-none z-0">
+              {/* North America */}
+              <path d="M100,100 Q150,80 200,120 T250,200 L200,280 L120,240 Z" />
+              {/* South America */}
+              <path d="M220,300 Q280,320 300,400 T250,480 L180,450 Z" />
+              {/* Europe/Africa/Asia */}
+              <path d="M450,150 Q500,80 600,100 T750,150 T850,250 T700,400 T500,420 L450,300 Z" />
+              {/* Australia */}
+              <path d="M780,420 Q820,400 860,420 T840,460 T780,440 Z" />
+            </svg>
+
+            {/* Glowing Neon-Mint Node Dots */}
+            <div className="absolute inset-0 z-10 pointer-events-none">
+              {nodes.map((node) => {
+                const left = ((node.lng + 180) / 360) * 100;
+                const top = ((90 - node.lat) / 180) * 100;
+
+                return (
+                  <div 
+                    key={node.id} 
+                    className="absolute -translate-x-1/2 -translate-y-1/2"
+                    style={{ left: `${left}%`, top: `${top}%` }}
+                  >
+                    <div className={cn(
+                      "w-1.5 h-1.5 rounded-full relative transition-all duration-300",
+                      node.intensity < 150 ? "bg-[#00FF9D] shadow-[0_0_8px_#00FF9D]" : 
+                      node.intensity < 300 ? "bg-yellow-500 shadow-[0_0_8px_#EAB308]" : 
+                      "bg-red-500 shadow-[0_0_8px_#EF4444]",
+                      isSpiking && "scale-150 brightness-150"
+                    )}>
+                      <div className={cn(
+                        "absolute inset-0 rounded-full animate-ping opacity-40",
+                        node.intensity < 150 ? "bg-[#00FF9D]" : 
+                        node.intensity < 300 ? "bg-yellow-500" : "bg-red-500",
+                        isSpiking && "animate-[ping_0.5s_cubic-bezier(0,0,0.2,1)_infinite]"
+                      )} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="relative z-20 flex justify-between items-start mb-8">
               <div>
-                <label className="font-mono text-[8px] text-emerald uppercase tracking-[0.4em] mb-2 block opacity-60">Real-time Feed</label>
+                <label className="font-mono text-[8px] text-emerald uppercase tracking-[0.4em] mb-2 block opacity-60">Global Monitoring</label>
                 <h2 className="text-2xl font-light tracking-tight leading-none uppercase">Network <br /><span className="font-extrabold text-white">Waveform</span></h2>
               </div>
               <div className="flex flex-col items-end">
-                 <div className="flex items-center gap-2 mb-2 bg-emerald/5 border border-emerald/20 px-3 py-1">
+                 <div className="flex items-center gap-2 mb-2 bg-black border border-emerald/20 px-3 py-1">
                    <div className="portaldot-pulse" />
                    <span className="text-[8px] font-mono text-emerald font-bold tracking-[0.2em] uppercase">LINK ACTIVE</span>
                  </div>
-                 <span className="text-[7px] text-zinc-700 font-mono text-right tracking-widest uppercase">Sampling Block Weight (WT)</span>
+                 <span className="text-[7px] text-zinc-700 font-mono text-right tracking-widest uppercase">Global Weight Sampling (WT)</span>
               </div>
             </div>
 
-            <div className="flex-1 w-full pointer-events-none relative">
+            <div className="flex-1 w-full relative z-20">
               <div className="absolute inset-0 grid grid-cols-12 gap-px pointer-events-none opacity-5">
                  {Array.from({ length: 12 }).map((_, i) => <div key={i} className="border-l border-white/20 h-full" />)}
               </div>
@@ -301,29 +437,41 @@ export function Dashboard() {
                 <AreaChart data={dataFeed}>
                   <defs>
                     <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00FF9D" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#00FF9D" stopOpacity={0}/>
+                      <stop offset="5%" stopColor={isStressTesting ? "#FF4444" : "#00FF9D"} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={isStressTesting ? "#FF4444" : "#00FF9D"} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <Area 
                     type="monotone" 
                     dataKey="weight" 
-                    stroke="#00FF9D" 
+                    stroke={isStressTesting ? "#FF4444" : "#00FF9D"} 
                     strokeWidth={2}
                     fill="url(#colorWeight)" 
-                    isAnimationActive={false}
+                    isAnimationActive={true}
+                    animationDuration={1500}
                   />
-                  <YAxis hide domain={[0, 250]} />
+                  <YAxis hide domain={[0, 400]} />
                 </AreaChart>
               </ResponsiveContainer>
+              {isStressTesting && (
+                <div className="absolute top-0 right-0 p-4 animate-pulse">
+                   <div className="bg-red-500/20 border border-red-500/50 px-3 py-1 rounded-sm">
+                      <span className="text-[8px] font-mono text-red-500 font-black tracking-widest uppercase">STRESS_TEST_ACTIVE</span>
+                   </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Batcher & Stress Test Section */}
           <div className="flex-1 p-8 overflow-y-auto custom-scrollbar flex flex-col">
-            <div className="mb-8">
-              <label className="font-mono text-[8px] text-emerald uppercase tracking-[0.4em] mb-2 block opacity-60">SDK Operations</label>
-              <h2 className="text-2xl font-light tracking-tight leading-none uppercase">Fatigue <br /><span className="font-extrabold text-white">Stress Test</span></h2>
+            {/* Removed redundant map, now integrated into waveform section */}
+            
+            <div className="flex justify-between items-end mb-8">
+              <div>
+                <label className="font-mono text-[8px] text-emerald uppercase tracking-[0.4em] mb-2 block opacity-60">SDK Operations</label>
+                <h2 className="text-2xl font-light tracking-tight leading-none uppercase">Green <br /><span className="font-extrabold text-white">Batcher Engine</span></h2>
+              </div>
             </div>
 
             {/* Fatigue Warning from Python Engine */}
@@ -404,27 +552,32 @@ export function Dashboard() {
             </div>
 
             <button 
-              onClick={actions.submitBatch}
-              disabled={!!batchStatus && batchStatus.startsWith('COMPOSING')}
-              className="w-full py-5 bg-emerald text-black font-black uppercase text-[10px] tracking-[0.4em] hover:scale-[1.01] transition-all hover:glow-emerald active:scale-95 disabled:opacity-50 relative group overflow-hidden"
+              onClick={() => actions.setStressTest(!isStressTesting)}
+              className={cn(
+                "w-full py-5 font-black uppercase text-[10px] tracking-[0.4em] transition-all active:scale-95 relative group overflow-hidden border",
+                isStressTesting 
+                  ? "bg-red-500 text-white border-red-500 shadow-[0_0_30px_rgba(255,68,68,0.3)]" 
+                  : "bg-emerald text-black border-emerald hover:scale-[1.01] hover:glow-emerald"
+              )}
             >
               <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none" />
-              {batchStatus && batchStatus.startsWith('COMPOSING') ? "INJECTING_BATCH..." : "EXECUTE GREEN_BATCH"}
+              {isStressTesting ? "ABORT STRESS_TEST" : "EXECUTE GREEN_BATCH / STRESS_TEST"}
             </button>
           </div>
         </section>
 
         {/* Right Panel: Active Governance & Alert Stream */}
-        <section className="col-span-3 geometric-panel bg-[#050505] overflow-y-auto custom-scrollbar">
-          <div className="mb-10">
-            <label className="font-mono text-[8px] text-emerald uppercase tracking-[0.4em] mb-3 block opacity-60">Governance Layer</label>
-            <h2 className="text-2xl font-light tracking-tight leading-none uppercase">Sentinel <br /><span className="font-extrabold text-white">Approvals</span></h2>
-          </div>
+        <section className="col-span-3 geometric-panel bg-[#050505] border-l border-[#1A1A1A] overflow-y-auto custom-scrollbar shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+          <div className="p-8 flex flex-col h-full">
+            <div className="mb-10">
+              <label className="font-mono text-[8px] text-emerald uppercase tracking-[0.4em] mb-3 block opacity-60">Governance Layer</label>
+              <h2 className="text-2xl font-light tracking-tight leading-none uppercase">Active <br /><span className="font-extrabold text-white">Governance</span></h2>
+            </div>
 
-          <div className={cn(
-            "p-5 mb-10 border transition-all duration-700 relative overflow-hidden",
-            isAlertActive ? "border-red-500/50 bg-red-500/5 ring-1 ring-red-500/20" : "border-portaldot"
-          )}>
+            <div className={cn(
+              "p-5 mb-10 border transition-all duration-700 relative overflow-hidden bg-[#0a0a0a] shadow-[0_0_15px_rgba(0,255,157,0.02)]",
+              isAlertActive ? "border-red-500/50 bg-red-500/5 ring-1 ring-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.05)]" : "border-[#1A1A1A]"
+            )}>
             {isAlertActive && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 animate-ping m-3 rounded-full" />}
             <div className={cn(
               "font-mono text-[8px] font-black mb-4 tracking-[0.3em] uppercase",
@@ -487,7 +640,7 @@ export function Dashboard() {
                 govStatus === 'IDLE' && !activeAccount && "animate-pulse border-emerald/60 shadow-[0_0_15px_rgba(0,255,157,0.1)] hover:bg-emerald hover:text-black",
                 govStatus === 'IDLE' && activeAccount && "hover:bg-emerald hover:text-black",
                 govStatus === 'COMPOSING' && "bg-zinc-800 text-zinc-400 border-zinc-700 cursor-wait",
-                govStatus === 'SIGNING' && "bg-red-500/10 border-red-500/40 text-red-500 cursor-wait shadow-[0_0_20px_rgba(239,68,68,0.1)]",
+                govStatus === 'SIGNING' && "bg-[#FF4444]/10 border-[#FF4444]/40 text-[#FF4444] cursor-wait shadow-[0_0_20px_rgba(255,68,68,0.1)]",
                 govStatus === 'SUBMITTED' && "bg-emerald border-emerald text-black shadow-[0_0_30px_rgba(0,255,157,0.4)] animate-none"
               )}
             >
@@ -496,6 +649,39 @@ export function Dashboard() {
                govStatus === 'SIGNING' ? "AWAITING_GOVERNANCE_SIGS" : 
                govStatus === 'SUBMITTED' ? "PROPOSAL SUBMITTED" : "TRIGGER FLAG_CALL"}
             </button>
+
+            {/* Governance Proposal Feed */}
+            <div className="mt-8 p-5 bg-[#050505] border border-[#1A1A1A] shadow-[0_0_20px_rgba(0,255,157,0.03)] flex-shrink-0">
+               <div className="flex items-center justify-between mb-4">
+                 <div className="flex items-center gap-2">
+                   <Activity className="w-3 h-3 text-emerald opacity-50" />
+                   <span className="text-[8px] text-zinc-500 font-mono tracking-widest uppercase">Referendum Feed</span>
+                 </div>
+               </div>
+                <div className="space-y-3">
+                 {proposals.map((prop) => (
+                   <div key={prop.id} className="p-3 border border-[#111111] hover:border-emerald/30 bg-black transition-colors group/prop">
+                     <div className="flex justify-between items-start mb-2">
+                       <span className="text-[9px] font-black text-white uppercase tracking-tight leading-tight">{prop.title}</span>
+                       <span className={cn(
+                         "text-[6px] font-mono px-1 py-0.5 border",
+                         prop.status === 'VOTING' ? "border-yellow-500/40 text-yellow-500" : "border-emerald/40 text-emerald"
+                       )}>
+                         {prop.status}
+                       </span>
+                     </div>
+                     <div className="flex justify-between items-center text-[6px] font-mono text-zinc-600 uppercase tracking-widest gap-4">
+                       <span className="truncate">{prop.id} // {prop.type} // By: {prop.creator}</span>
+                       {prop.status === 'VOTING' && (
+                         <button className="px-2 py-1 bg-emerald border border-emerald text-black font-black hover:bg-white hover:border-white transition-all">
+                           VOTE
+                         </button>
+                       )}
+                     </div>
+                   </div>
+                 ))}
+               </div>
+            </div>
 
             {/* Soulbound Attestation Call UI */}
             {activeAccount && !attestation?.exists && (
@@ -538,6 +724,7 @@ export function Dashboard() {
                </div>
             </div>
           </div>
+          </div>
           
           <div className="mt-8 border border-dashed border-portaldot p-5 opacity-40 hover:opacity-100 transition-opacity">
              <div className="text-[7px] font-mono text-zinc-500 text-center uppercase tracking-[0.2em] mb-2 leading-relaxed">
@@ -550,6 +737,38 @@ export function Dashboard() {
           </div>
         </section>
       </main>
+
+      {/* Live System Logs Terminal Bar */}
+      <div className="h-24 bg-black border-t border-portaldot flex flex-col font-mono overflow-hidden shrink-0">
+        <div className="h-6 px-10 border-b border-portaldot bg-zinc-900/40 flex items-center justify-between">
+           <div className="flex items-center gap-3">
+             <Terminal className="w-3 h-3 text-emerald" />
+             <span className="text-[7px] text-zinc-500 uppercase tracking-[0.4em]">Live System Terminal // SDK_OUTPUT_STREAM</span>
+           </div>
+           <div className="flex gap-4 text-[6px] tracking-widest text-zinc-700">
+             <span>BUFFER: 1024KB</span>
+             <span>TX_RATE: 4.2KB/s</span>
+           </div>
+        </div>
+        <div className="flex-1 px-10 py-2 overflow-y-auto custom-scrollbar flex flex-col-reverse">
+           {[...systemLogs].reverse().map((log, i) => (
+             <div key={i} className="flex gap-4 items-baseline py-0.5 group">
+                <span className="text-[7px] text-zinc-700 shrink-0">{log.time}</span>
+                <span className={cn(
+                  "text-[8px] tracking-tight uppercase leading-none",
+                  log.level === 'SUCCESS' ? "text-emerald" : 
+                  log.level === 'WARN' ? "text-yellow-500" : 
+                  log.level === 'ERROR' ? "text-[#FF4444]" : "text-zinc-500"
+                )}>
+                  [{log.level}] {log.msg}
+                </span>
+             </div>
+           ))}
+           {systemLogs.length === 0 && (
+             <span className="text-[8px] text-zinc-800 animate-pulse uppercase tracking-widest italic">Awaiting connection handshake...</span>
+           )}
+        </div>
+      </div>
 
       {/* Global Status Footer */}
       <footer className="h-10 bg-[#0A0A0A] border-t border-portaldot flex items-center px-10 justify-between shrink-0 font-mono">

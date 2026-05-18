@@ -6,6 +6,31 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { portaldot, type Extrinsic, type BatchHistory } from '../services/portaldotService';
 
+export interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  address: string;
+  efficiency: number;
+  status: 'OPTIMAL' | 'STABLE' | 'DEGRADED';
+}
+
+export interface GovernanceProposal {
+  id: string;
+  title: string;
+  type: string;
+  status: 'VOTING' | 'PASSED' | 'FAILED';
+  creator: string;
+  timestamp: Date;
+}
+
+export interface NodeLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  intensity: number; // gCO2/kWh
+}
+
 export interface SentinelState {
   currentBlock: number;
   dataFeed: { time: string; weight: number }[];
@@ -23,6 +48,9 @@ export interface SentinelState {
   approvalCount: number;
   batchStatus: string | null;
   govStatus: 'IDLE' | 'COMPOSING' | 'SIGNING' | 'SUBMITTED';
+  isStressTesting: boolean;
+  isSpiking: boolean;
+  toast: string | null;
   oracleData: {
     region: string;
     carbon_intensity: string;
@@ -34,6 +62,10 @@ export interface SentinelState {
     totalCarbon: string;
     avgSustainability: string;
   };
+  leaderboard: LeaderboardEntry[];
+  proposals: GovernanceProposal[];
+  nodes: NodeLocation[];
+  systemLogs: { time: string; level: 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR'; msg: string }[];
 }
 
 export function useSentinelData() {
@@ -51,6 +83,74 @@ export function useSentinelData() {
   const [batchStatus, setBatchStatus] = useState<string | null>(null);
   const [govStatus, setGovStatus] = useState<'IDLE' | 'COMPOSING' | 'SIGNING' | 'SUBMITTED'>('IDLE');
   const [oracleData, setOracleData] = useState<any>(null);
+  const [isStressTesting, setIsStressTesting] = useState(false);
+  const [isSpiking, setIsSpiking] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  
+  // Advanced State for Functional Depth
+  const [leaderboard] = useState<LeaderboardEntry[]>([
+    { rank: 1, name: 'VAL_ALPHA', address: '5GrwvaEF...', efficiency: 99.8, status: 'OPTIMAL' },
+    { rank: 2, name: 'VAL_SIGMA', address: '5FHneW46...', efficiency: 99.42, status: 'OPTIMAL' },
+    { rank: 3, name: 'VAL_KAPPA', address: '5FLSigPS...', efficiency: 98.4, status: 'STABLE' },
+    { rank: 4, name: 'VAL_OMEGA', address: '5DAAnrjH...', efficiency: 97.9, status: 'STABLE' },
+    { rank: 5, name: 'VAL_DELTA', address: '5HGjWAmo...', efficiency: 96.2, status: 'DEGRADED' },
+  ]);
+
+  const [proposals, setProposals] = useState<GovernanceProposal[]>([
+    { id: '#103', title: 'Adjust Treasury Slash Ratio', type: 'Treasury', status: 'PASSED', creator: 'SOL_1', timestamp: new Date(Date.now() - 86400000) },
+    { id: '#102', title: 'Network Efficiency Subsidy', type: 'Runtime', status: 'PASSED', creator: 'SYS_ADMIN', timestamp: new Date(Date.now() - 172800000) },
+  ]);
+
+  const [nodes, setNodes] = useState<NodeLocation[]>([
+    { id: 'LDN-01', name: 'London Relay', lat: 51.5, lng: -0.12, intensity: 124 },
+    { id: 'NYC-04', name: 'New York Sentinel', lat: 40.7, lng: -74.0, intensity: 245 },
+    { id: 'TKY-02', name: 'Tokyo Node', lat: 35.6, lng: 139.6, intensity: 88 },
+    { id: 'BER-11', name: 'Berlin Auditor', lat: 52.5, lng: 13.4, intensity: 412 },
+    { id: 'SYD-07', name: 'Sydney Bridge', lat: -33.8, lng: 151.2, intensity: 156 },
+    { id: 'SGP-03', name: 'Singapore Hub', lat: 1.3, lng: 103.8, intensity: 320 },
+    { id: 'SFO-09', name: 'San Francisco Terminal', lat: 37.7, lng: -122.4, intensity: 110 },
+    { id: 'BRS-02', name: 'Brasilia Link', lat: -15.7, lng: -47.8, intensity: 210 },
+  ]);
+
+  const [systemLogs, setSystemLogs] = useState<{ time: string; level: 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR'; msg: string }[]>([]);
+
+  const addLog = useCallback((msg: string, level: 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR' = 'INFO') => {
+    const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setSystemLogs(prev => [...prev.slice(-9), { time, level, msg }]);
+  }, []);
+
+  // Dynamic Waveform & Spike Generation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      // Generate weight value with probability of a spike
+      const baseWeight = isStressTesting ? 180 : 80;
+      const spikeChance = isStressTesting ? 0.4 : 0.15;
+      const spikeMagnitude = isStressTesting ? 150 : 80;
+      
+      const val = Math.random() < spikeChance 
+        ? baseWeight + Math.random() * spikeMagnitude 
+        : baseWeight + Math.random() * 20;
+
+      const isHighWeight = val > (isStressTesting ? 250 : 140);
+      setIsSpiking(isHighWeight);
+      if (isHighWeight) {
+        setTimeout(() => setIsSpiking(false), 800);
+      }
+
+      setDataFeed(prev => [...prev.slice(-19), { time, weight: val }]);
+
+      // Log high spikes
+      if (isHighWeight) {
+        addLog(`[WARN] High Network Weight Detected: ${Math.floor(val)}M WT`, isStressTesting ? 'ERROR' : 'WARN');
+      } else if (Math.random() > 0.8) {
+        addLog(`[SENTINEL] Block Verification: Weight Stable.`, 'INFO');
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isStressTesting, addLog]);
 
   // Initial Data Fetch
   useEffect(() => {
@@ -65,6 +165,10 @@ export function useSentinelData() {
       // Carbon Oracle
       const oracle = await portaldot.fetchCarbonOracle();
       setOracleData(oracle);
+
+      addLog('Sentinel System Initialized. Awaiting block stream...', 'INFO');
+      addLog('Establishing Polkadot JS connection...', 'INFO');
+      addLog('Node Synchronization 100% complete.', 'SUCCESS');
     };
     init();
   }, []);
@@ -82,9 +186,12 @@ export function useSentinelData() {
           // Scale weight for waveform display
           setDataFeed(prev => [...prev.slice(-19), { time, weight: ext.weight / 1000000 }]);
 
+          addLog(`Block #${msg.block} Verified. Weight: ${ext.weight.toLocaleString()} WT`, 'INFO');
+
           // Refresh Fatigue Prediction periodically (every 5 blocks)
           if (msg.block % 5 === 0) {
             portaldot.fetchFatigue().then(setFatigueData);
+            addLog(`Fatigue Audit Complete. Warning: ${fatigueData?.warning_level || 'NONE'}`, 'INFO');
           }
         }
       },
@@ -131,6 +238,11 @@ export function useSentinelData() {
     setGovStatus('COMPOSING');
     setIsAlertActive(true);
     setApprovalCount(1);
+    addLog('[GOV] REFERENDUM #104 INITIALIZED. PROPOSAL: SLASH VALIDATOR 0x76B...', 'WARN');
+    addLog(`Initiating Flag Call for high-energy violation...`, 'WARN');
+
+    // Make the target node turn RED on the map
+    setNodes(prev => prev.map(n => n.id === 'NYC-04' ? { ...n, intensity: 450 } : n));
     
     try {
       // 1. Validator: In a real app, we'd check the on-chain Auditor list
@@ -175,10 +287,23 @@ export function useSentinelData() {
         // 3. Governance Pallet Bridge: Submit Proposal
         console.log('[GOVERNANCE] Multisig threshold reached. Bridging to Pallet Democracy...');
         await portaldot.proposeGovernance(call, account.address);
+        addLog('Multisig threshold reached. Bridging to Pallet Democracy...', 'SUCCESS');
+
+        const propId = `#104-${Date.now()}`;
+        const newProp: GovernanceProposal = {
+          id: propId,
+          title: `Proposal ${propId}: Reduce Rewards for High-Energy Node`,
+          type: 'Runtime',
+          status: 'VOTING',
+          creator: account.address.slice(0, 8),
+          timestamp: new Date()
+        };
+        setProposals(prev => [newProp, ...prev]);
+        addLog(`Governance Referendum #42 created. Active for voting.`, 'SUCCESS');
 
         // SDK Logic: Log to Batch Ledger
         const govEntry: BatchHistory = {
-          id: `PROPOSAL_#${Math.floor(Math.random() * 1000)}`,
+          id: `PROPOSAL_#${Date.now()}`,
           timestamp: Date.now(),
           totalWeight: 4500000,
           carbonEstimate: "-15.42", // String as per interface
@@ -188,6 +313,9 @@ export function useSentinelData() {
         // Finality
         setGovStatus('SUBMITTED');
         
+        setToast('Consensus Reached. Governance Proposal Submitted to Portaldot LAO.');
+        setTimeout(() => setToast(null), 5000);
+
         // Update Oracle: Threat Mitigated (lower intensity, higher score)
         setOracleData((prev: any) => ({
           ...prev,
@@ -220,6 +348,7 @@ export function useSentinelData() {
     // Refresh history
     const updatedHistory = await portaldot.fetchHistory();
     setBatchHistory(updatedHistory);
+    addLog(`Utility.Batch successfully executed. Total Weight: ${result.totalWeight.toLocaleString()} WT`, 'SUCCESS');
     
     setTimeout(() => {
       setBatchStatus(`BATCH SUBMITTED: ${result.totalWeight.toLocaleString()} WT`);
@@ -259,14 +388,22 @@ export function useSentinelData() {
       approvalCount,
       batchStatus,
       govStatus,
+      isStressTesting,
+      isSpiking,
+      toast,
       oracleData,
-      carbonStats
+      carbonStats,
+      leaderboard,
+      proposals,
+      nodes,
+      systemLogs
     },
     actions: {
       triggerMultisig,
       submitBatch,
       runAudit,
       mintBadge,
+      setStressTest: setIsStressTesting,
       refreshOracle: (region: string) => portaldot.fetchCarbonOracle(region).then(setOracleData)
     }
   };

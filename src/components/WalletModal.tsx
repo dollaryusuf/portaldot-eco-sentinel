@@ -71,11 +71,11 @@ export function WalletModal({
 
                <div className="space-y-4">
                  {error && (
-                   <div className="p-3 border border-red-500/30 bg-red-500/5 text-red-500 text-[9px] font-mono uppercase tracking-widest text-center animate-pulse">
+                   <div className="p-3 border border-[#FF4444]/40 bg-[#FF4444]/5 text-[#FF4444] text-[9px] font-mono uppercase tracking-widest text-center animate-pulse">
                      {error}
                    </div>
                  )}
-                 {error?.includes('Security Block') && (
+                 {error && (
                    <div className="space-y-2">
                      <button
                        onClick={() => window.open(window.location.href, '_blank')}
@@ -85,9 +85,9 @@ export function WalletModal({
                      </button>
                      <button
                        onClick={enableMockMode}
-                       className="w-full py-4 bg-emerald/10 border border-emerald/40 text-emerald font-black uppercase text-[9px] tracking-[0.2em] hover:bg-emerald hover:text-black transition-all"
+                       className="w-full py-4 bg-emerald/20 border-2 border-emerald text-emerald font-black uppercase text-[9px] tracking-[0.2em] hover:bg-emerald hover:text-black transition-all shadow-[0_0_20px_rgba(0,255,157,0.3)] animate-pulse"
                      >
-                       BYPASS VIA DEMO MODE
+                       RESOLVE VIA DEMO MODE (BYPASS)
                      </button>
                    </div>
                  )}

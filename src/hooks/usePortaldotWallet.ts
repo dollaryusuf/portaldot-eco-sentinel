@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { ApiPromise, WsProvider } from '@polkadot/api';
 import { 
   web3Enable, 
   web3Accounts, 
@@ -15,7 +16,7 @@ const PORTALDOT_NETWORK = {
   chain: 'Portaldot Mainnet',
   genesisHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
   ss58Format: 42,
-  tokenDecimals: 10,
+  tokenDecimals: 12,
   tokenSymbol: 'DOT',
   rpcUrl: 'wss://rpc.portaldot.network'
 };
@@ -28,6 +29,16 @@ export function usePortaldotWallet() {
   const [isExtensionEnabled, setIsExtensionEnabled] = useState(false);
   const [hasExtensions, setHasExtensions] = useState<boolean | null>(null);
   const [isMock, setIsMock] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   // Top-Tier: Inject Network Metadata into Extension
   const injectMetadata = useCallback(async () => {
@@ -52,57 +63,60 @@ export function usePortaldotWallet() {
     return false;
   }, []);
 
+  // This logic gets the Genesis Hash automatically from the network
+  const getPortaldotSpecs = useCallback(async (api: any) => {
+    const genesisHash = api.genesisHash.toHex();
+    console.log("Portaldot Genesis Hash:", genesisHash);
+    return genesisHash;
+  }, []);
+
   const initializeWallet = useCallback(async () => {
     setIsConnecting(true);
     setError(null);
     setHasExtensions(null);
 
+    // Initial check for injectedWeb3 presence
+    if (!(window as any).injectedWeb3) {
+      setHasExtensions(false);
+      setError('Security Block: No Polkadot-compatible extension found.');
+      setIsConnecting(false);
+      return;
+    }
+
+    // Set a handshake timeout (5s)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setIsConnecting(false);
+      setError('Connection Timed Out. Extension may be restricted or blocked by browser.');
+      console.error('[WALLET] Handshake Timed Out after 5000ms');
+      timeoutRef.current = null;
+    }, 5000);
+
     try {
-      // 1. Wait for document to be ready if needed
-      if (document.readyState !== 'complete') {
-        await new Promise(resolve => {
-          window.addEventListener('load', resolve, { once: true });
-          // Fallback if load event already fired but readyState isn't complete (unlikely but safe)
-          setTimeout(resolve, 1000); 
-        });
-      }
-
-      // 2. Poll for injectedWeb3 availability
-      const detected = await detectExtensions();
-      if (!detected) {
-        setHasExtensions(false);
-        setError('No Polkadot extension found. Please install Talisman, SubWallet, or Polkadot.js.');
-        setIsConnecting(false);
-        return;
-      }
-
-      // 3. Loud Handshake: Added 1500ms delay to ensure extension is fully primed
-      console.log('[WALLET] Initiating Loud Handshake with extension provider...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Request permissions with specific origin name (Triggers "Allow" popup)
-      console.log('[WALLET] Calling web3Enable: Portaldot Sentinel Auditor Portal');
-      const extensions = await web3Enable('Portaldot Sentinel Auditor Portal');
-      
-      if (extensions.length === 0) {
-        // Check if there's an error from the extension specifically about domain blocking
-        const isBlocked = (window as any).injectedWeb3 && Object.keys((window as any).injectedWeb3).length > 0;
-        if (isBlocked) {
-          setError('Security Block: This domain is not whitelisted in your extension. Please allow access in settings or use Demo Mode.');
-        } else {
-          setHasExtensions(false);
-          setError('Access rejected. Please authorize the extension for Portaldot.');
-        }
-        setIsConnecting(false);
-        return;
-      }
-
       setHasExtensions(true);
-      await injectMetadata();
+
+      // Robust Fail-Safe Connection: Single web3Enable call
+      console.log('[WALLET] Initiating Robust Handshake: Portaldot Sentinel');
+      
+      // Request permissions
+      const extensions = await web3Enable('Portaldot Sentinel');
+      
+      // Clear timeout if web3Enable resolves
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      if (extensions.length === 0) {
+        setError('Security Block: This domain is not whitelisted or SubWallet is restricted.');
+        setIsConnecting(false);
+        return;
+      }
 
       setIsExtensionEnabled(true);
       setIsMock(false);
-      
+
+      // Standard account fetch
       const allAccounts = await web3Accounts({ ss58Format: PORTALDOT_NETWORK.ss58Format });
       setAccounts(allAccounts);
 
@@ -110,12 +124,21 @@ export function usePortaldotWallet() {
         setActiveAccount(allAccounts[0]);
       }
     } catch (err: any) {
-      const errorMessage = typeof err === 'string' ? err : (err.message || '');
-      // Catch Errors: Log the specific error as requested
-      console.error('[WALLET] Loud Handshake Failure:', err);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      
+      const errorStr = String(err);
+      const errorMessage = typeof err === 'string' ? err : (err.message || errorStr);
+      console.error('[WALLET] Handshake Error Detail:', err);
 
-      if (errorMessage.includes('not allowed to interact') || errorMessage.includes('Security Block')) {
-        setError('Security Block: SubWallet has blocked this iframe. Open in a NEW TAB or allow access in Extension Settings.');
+      if (errorMessage.includes('not allowed to interact') || 
+          errorStr.includes('is not allowed to interact') || 
+          errorMessage.includes('Security Block') ||
+          errorMessage.toLowerCase().includes('subwallet') ||
+          errorMessage.toLowerCase().includes('initializing subwallet-js')) {
+        setError('Security Block: This domain (Google Cloud) is not allowed by SubWallet. Click "OPEN IN NEW TAB" or use Demo Mode.');
       } else if (errorMessage.includes('Rejected') || errorMessage.includes('cancelled')) {
         setError('Connection rejected. Please authorize the extension to continue.');
       } else {
@@ -124,7 +147,7 @@ export function usePortaldotWallet() {
     } finally {
       setIsConnecting(false);
     }
-  }, [detectExtensions, injectMetadata]);
+  }, []);
 
   const disconnect = useCallback(() => {
     setActiveAccount(null);
