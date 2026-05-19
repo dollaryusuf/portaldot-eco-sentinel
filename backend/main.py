@@ -12,11 +12,29 @@ import os
 
 app = FastAPI(title="Portaldot Eco-Sentinel API")
 
-# Portaldot Initialization
-portaldot = SubstrateInterface(
-    url="wss://rpc.portaldot.network",
-    ss58_format=42
-)
+# Portaldot Initialization with Fail-Safe logic
+is_simulated = False
+rpc_url = "wss://rpc.portaldot.network"
+fallback_url = "wss://mainnet.portaldot.io"
+
+try:
+    portaldot = SubstrateInterface(
+        url=rpc_url,
+        ss58_format=42
+    )
+    print(f"[INFO] Successfully connected to {rpc_url}")
+except Exception as e:
+    print(f"[WARN] Primary RPC failed: {str(e)}. Trying fallback...")
+    try:
+        portaldot = SubstrateInterface(
+            url=fallback_url,
+            ss58_format=42
+        )
+        print(f"[INFO] Successfully connected to fallback {fallback_url}")
+    except Exception as e2:
+        print("[WARN] RPC UNREACHABLE. ENTERING SENTINEL SIMULATION MODE.")
+        is_simulated = True
+        portaldot = None
 
 # Configure CORS
 origins = [
@@ -56,7 +74,12 @@ class MintRequest(BaseModel):
 # API Routes
 @app.get("/api/health")
 async def health_check():
-    return {"status": "online", "system": "Portaldot Sentinel", "timestamp": int(time.time())}
+    return {
+        "status": "online",
+        "system": "Portaldot Sentinel",
+        "mode": "simulation" if is_simulated else "live",
+        "timestamp": int(time.time())
+    }
 
 @app.get("/api/stats")
 async def get_stats(identifier: str = Query("0x897ae...912")):
