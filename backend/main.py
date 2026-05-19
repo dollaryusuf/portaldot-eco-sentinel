@@ -37,16 +37,30 @@ except Exception as e:
         portaldot = None
 
 # Configure CORS
-origins = [
-    "https://eco-dotsentinel.netlify.app",
-    "http://localhost:3000",
-    "http://localhost:5173",
-]
+from fastapi.responses import JSONResponse
+origins = ["*"]
+
+from fastapi import Request
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("api")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Incoming request: {request.method} {request.url}")
+    try:
+        response = await call_next(request)
+        logger.info(f"Response status: {response.status_code}")
+        return response
+    except Exception as e:
+        logger.error(f"Internal Server Error: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -207,4 +221,4 @@ if os.path.exists(frontend_dist) or local_dist:
         return FileResponse(os.path.join(static_dir, "index.html"))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(app, host="0.0.0.0", port=5000)
