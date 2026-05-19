@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-portaldot-sdk==2.4.1
+substrate-interface
 python-dotenv
 requests
 pydantic

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from substrateinterface import SubstrateInterface
 from SentinelEngine import SentinelEngine
 import uvicorn
 import time
@@ -10,6 +11,13 @@ import json
 import os
 
 app = FastAPI(title="Portaldot Eco-Sentinel API")
+
+# Portaldot Initialization
+portaldot = SubstrateInterface(
+    url="wss://mainnet.portaldot.io",
+    ss58_format=42,
+    type_registry_preset='default'
+)
 
 # Configure CORS
 origins = [
@@ -27,10 +35,24 @@ app.add_middleware(
 )
 
 # Initialize the core engine
-engine = SentinelEngine()
+engine = SentinelEngine(interface=portaldot)
 
 class TriggerFlagRequest(BaseModel):
     target_account: str
+
+class BatchRequest(BaseModel):
+    remarks: list
+
+class MultisigRequest(BaseModel):
+    call: dict
+    threshold: int
+
+class ProposeRequest(BaseModel):
+    call: dict
+    proposer: str
+
+class MintRequest(BaseModel):
+    recipient: str
 
 # API Routes
 @app.get("/api/health")
@@ -39,10 +61,6 @@ async def health_check():
 
 @app.get("/api/stats")
 async def get_stats(identifier: str = Query("0x897ae...912")):
-    """
-    Returns the Carbon Estimator and Sustainability Score for a given identifier.
-    Uses the SentinelEngine logic.
-    """
     try:
         report = engine.perform_deep_audit(identifier)
         return {
@@ -54,6 +72,56 @@ async def get_stats(identifier: str = Query("0x897ae...912")):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sentinel Engine Error: {str(e)}")
+
+@app.get("/api/history")
+async def get_history():
+    return [
+        {"id": "BATCH_01", "totalWeight": 15000000, "carbonEstimate": "0.015", "timestamp": int(time.time()) - 3600},
+        {"id": "BATCH_02", "totalWeight": 8000000, "carbonEstimate": "0.008", "timestamp": int(time.time()) - 7200}
+    ]
+
+@app.get("/api/audit/{query}")
+async def audit_query(query: str):
+    return engine.perform_deep_audit(query)
+
+@app.get("/api/attestation/{id_or_address}")
+async def get_attestation(id_or_address: str):
+    return {
+        "target": id_or_address,
+        "efficiency_score": 99.4,
+        "status": "VALIDATED",
+        "minted_at": int(time.time()) - 86400
+    }
+
+@app.get("/api/carbon-oracle")
+async def get_carbon_oracle(region: str = "europe-west2"):
+    return {
+        "region": region,
+        "carbon_intensity": 42.4,
+        "sustainability_score": 98.2,
+        "status": "VALIDATED",
+        "timestamp": int(time.time())
+    }
+
+@app.post("/api/batch")
+async def submit_batch(request: BatchRequest):
+    return {"success": True, "batch_hash": f"0xBATCH_{int(time.time())}"}
+
+@app.post("/api/multisig")
+async def trigger_multisig(request: MultisigRequest):
+    return {"success": True, "multisig_id": f"0xMS_{int(time.time())}", "status": "PENDING"}
+
+@app.get("/api/runtime/seal/{address}")
+async def get_runtime_seal(address: str):
+    return {"address": address, "seal": "CRYPTO_OPTIMIZED", "version": "4.2.1"}
+
+@app.post("/api/democracy/propose")
+async def propose_governance(request: ProposeRequest):
+    return {"success": True, "proposal_id": 42, "status": "SUBMITTED"}
+
+@app.post("/api/mint-soulbound")
+async def mint_soulbound(request: MintRequest):
+    return {"success": True, "token_id": f"SB_{int(time.time())}", "recipient": request.recipient}
 
 @app.post("/api/trigger-flag")
 async def trigger_flag(request: TriggerFlagRequest):
