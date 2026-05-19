@@ -71,6 +71,31 @@ async function startServer() {
     res.json(BATCH_HISTORY);
   });
 
+  app.get('/api/stats', (req, res) => {
+    const { identifier } = req.query;
+    console.log(`[ENGINE] Stats requested for ${identifier || '0xDefault'}`);
+    res.json({
+      carbon_estimator: (0.01 + Math.random() * 0.05).toFixed(4),
+      sustainability_score: (94 + Math.random() * 5).toFixed(2),
+      compliance: 'PASSED',
+      audit_id: `AUDIT_${Date.now()}`,
+      timestamp: Date.now()
+    });
+  });
+
+  app.post('/api/trigger-flag', (req, res) => {
+    const { target_account } = req.body;
+    console.log(`[MULTISIG] Flag triggered for account: ${target_account}`);
+    res.json({
+      success: true,
+      multisig_id: `0xMS_${Math.floor(Math.random() * 10000)}_SENTINEL`,
+      threshold: 2,
+      signers: ['Validator_Alpha', 'Validator_Beta', 'Validator_Gamma'],
+      status: 'AWAITING_GOVERNANCE',
+      proposed_at: Date.now()
+    });
+  });
+
   // --- Civilization Integrations ---
 
   app.get('/api/carbon-oracle', (req, res) => {

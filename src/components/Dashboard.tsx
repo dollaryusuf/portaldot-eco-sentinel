@@ -71,7 +71,8 @@ export function Dashboard() {
     proposals,
     nodes,
     systemLogs,
-    toast
+    toast,
+    isDemoMode
   } = state;
 
   return (
@@ -785,6 +786,12 @@ export function Dashboard() {
               <div className="w-1 h-3 bg-emerald/20" />
               <span>ENCODING: SCALE (v4)</span>
             </div>
+            {isDemoMode && (
+              <div className="flex items-center gap-2 px-2 py-0.5 bg-yellow-500/10 border border-yellow-500/30">
+                 <div className="w-1 h-1 rounded-full bg-yellow-500 animate-pulse" />
+                 <span className="text-[7px] text-yellow-500 font-black tracking-widest uppercase italic">Demo Mode</span>
+              </div>
+            )}
          </div>
          <div className="flex items-center gap-4">
             <span className="text-[8px] text-emerald font-black tracking-[0.4em] uppercase italic">

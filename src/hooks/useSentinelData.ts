@@ -50,6 +50,7 @@ export interface SentinelState {
   govStatus: 'IDLE' | 'COMPOSING' | 'SIGNING' | 'SUBMITTED';
   isStressTesting: boolean;
   isSpiking: boolean;
+  isDemoMode: boolean;
   toast: string | null;
   oracleData: {
     region: string;
@@ -85,6 +86,7 @@ export function useSentinelData() {
   const [oracleData, setOracleData] = useState<any>(null);
   const [isStressTesting, setIsStressTesting] = useState(false);
   const [isSpiking, setIsSpiking] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   
   // Advanced State for Functional Depth
@@ -155,23 +157,35 @@ export function useSentinelData() {
   // Initial Data Fetch
   useEffect(() => {
     const init = async () => {
-      const history = await portaldot.fetchHistory();
-      setBatchHistory(history);
-      const fatigue = await portaldot.fetchFatigue();
-      setFatigueData(fatigue);
-      // Initial attestation lookup for a default validator
-      const att = await portaldot.fetchAttestation('validator_01');
-      setAttestation(att);
-      // Carbon Oracle
-      const oracle = await portaldot.fetchCarbonOracle();
-      setOracleData(oracle);
+      try {
+        const history = await portaldot.fetchHistory();
+        setBatchHistory(history);
+        const fatigue = await portaldot.fetchFatigue();
+        setFatigueData(fatigue);
+        const att = await portaldot.fetchAttestation('validator_01');
+        setAttestation(att);
+        const oracle = await portaldot.fetchCarbonOracle();
+        setOracleData(oracle);
 
-      addLog('Sentinel System Initialized. Awaiting block stream...', 'INFO');
-      addLog('Establishing Polkadot JS connection...', 'INFO');
-      addLog('Node Synchronization 100% complete.', 'SUCCESS');
+        addLog('Sentinel System Initialized. Awaiting block stream...', 'INFO');
+        addLog('Establishing Polkadot JS connection...', 'INFO');
+        addLog('Node Synchronization 100% complete.', 'SUCCESS');
+      } catch (err) {
+        console.error('[API] Initialization failed, switching to Demo Mode:', err);
+        setIsDemoMode(true);
+        // Load fallback mock data for Carbon Oracle
+        setOracleData({
+          region: 'europe-west2',
+          carbon_intensity: '0.039',
+          sustainability_score: '99.2',
+          status: 'OPTIMAL',
+          timestamp: Date.now()
+        });
+        addLog('[SYSTEM] API Connection Failed. Silent Demo Mode activated.', 'WARN');
+      }
     };
     init();
-  }, []);
+  }, [addLog]);
 
   // WebSocket Listener
   useEffect(() => {
@@ -227,10 +241,21 @@ export function useSentinelData() {
         const att = await portaldot.fetchAttestation(query);
         setAttestation(att);
       }
+    } catch (err) {
+      console.error('[API] Audit failed:', err);
+      setIsDemoMode(true);
+      // Fallback result
+      setAuditResult({
+        status: 'VERIFIED',
+        auditor: 'EcoSentinel_AI',
+        score: 99.8,
+        findings: ['Zero Carbon Leakage', 'Optimal Energy Mix']
+      });
+      addLog(`[SYSTEM] Audit API unavailable. Switching to local verifier.`, 'WARN');
     } finally {
       setIsAuditing(false);
     }
-  }, []);
+  }, [addLog]);
 
   const triggerMultisig = useCallback(async (account: any, getSigner: () => Promise<any>) => {
     if (!account) return;
@@ -266,7 +291,15 @@ export function useSentinelData() {
       }
 
       const call = portaldot.compose_call('EcoSentinel', 'flag_high_energy', { account: '0xAccount_High_Energy' });
-      const response = await portaldot.triggerMultisig(call);
+      
+      let response;
+      try {
+        response = await portaldot.triggerMultisig(call);
+      } catch (err) {
+        console.warn('[API] Multisig API failed, using fallback signature logic.');
+        setIsDemoMode(true);
+        response = { required_signatures: 3, current_signatures: 1 };
+      }
       
       const threshold = response.required_signatures || 2;
       const current = response.current_signatures || 1;
@@ -286,7 +319,14 @@ export function useSentinelData() {
 
         // 3. Governance Pallet Bridge: Submit Proposal
         console.log('[GOVERNANCE] Multisig threshold reached. Bridging to Pallet Democracy...');
-        await portaldot.proposeGovernance(call, account.address);
+        
+        try {
+          await portaldot.proposeGovernance(call, account.address);
+        } catch (err) {
+          console.warn('[API] Governance submission failed, simulated success.');
+          setIsDemoMode(true);
+        }
+        
         addLog('Multisig threshold reached. Bridging to Pallet Democracy...', 'SUCCESS');
 
         const propId = `#104-${Date.now()}`;
@@ -318,9 +358,9 @@ export function useSentinelData() {
 
         // Update Oracle: Threat Mitigated (lower intensity, higher score)
         setOracleData((prev: any) => ({
-          ...prev,
-          carbon_intensity: (parseFloat(prev.carbon_intensity) * 0.8).toFixed(2),
-          sustainability_score: Math.min(100, parseFloat(prev.sustainability_score) + 5).toFixed(2)
+          ...prev || { region: 'europe-west2', carbon_intensity: '120', sustainability_score: '85' },
+          carbon_intensity: (parseFloat(prev?.carbon_intensity || '120') * 0.8).toFixed(2),
+          sustainability_score: Math.min(100, parseFloat(prev?.sustainability_score || '85') + 5).toFixed(2)
         }));
 
         setTimeout(() => {
@@ -333,44 +373,80 @@ export function useSentinelData() {
       await simulateApprovals();
     } catch (err: any) {
       console.error('Multisig Error:', err.message);
-      alert(err.message);
+      // No window.alert as per request, just log and reset
+      addLog(`[ERROR] Multisig failed: ${err.message}`, 'ERROR');
       setIsAlertActive(false);
       setGovStatus('IDLE');
     }
-  }, []);
+  }, [addLog]);
 
   const submitBatch = useCallback(async () => {
     setBatchStatus('COMPOSING UTILITY.BATCH...');
     const remarks = ['green-init', 'sust-audit', 'pwr-optim'];
     
-    const result = await portaldot.submitBatch(remarks);
-    
-    // Refresh history
-    const updatedHistory = await portaldot.fetchHistory();
-    setBatchHistory(updatedHistory);
-    addLog(`Utility.Batch successfully executed. Total Weight: ${result.totalWeight.toLocaleString()} WT`, 'SUCCESS');
-    
-    setTimeout(() => {
-      setBatchStatus(`BATCH SUBMITTED: ${result.totalWeight.toLocaleString()} WT`);
-      setTimeout(() => setBatchStatus(null), 3000);
-    }, 1500);
-  }, []);
+    try {
+      const result = await portaldot.submitBatch(remarks);
+      
+      // Refresh history
+      const updatedHistory = await portaldot.fetchHistory();
+      setBatchHistory(updatedHistory);
+      addLog(`Utility.Batch successfully executed. Total Weight: ${result.totalWeight.toLocaleString()} WT`, 'SUCCESS');
+      
+      setTimeout(() => {
+        setBatchStatus(`BATCH SUBMITTED: ${result.totalWeight.toLocaleString()} WT`);
+        setTimeout(() => setBatchStatus(null), 3000);
+      }, 1500);
+    } catch (err) {
+      console.error('[API] Batch submission failed:', err);
+      setIsDemoMode(true);
+      addLog('[SYSTEM] Batch API offline. Simulating local execution.', 'WARN');
+      
+      setTimeout(() => {
+        setBatchStatus(`BATCH SUBMITTED: 1,420,000 WT`);
+        setBatchHistory(prev => [{
+          id: `BATCH_${Date.now()}`,
+          totalWeight: 1420000,
+          carbonEstimate: "0.012",
+          timestamp: Date.now()
+        }, ...prev]);
+        setTimeout(() => setBatchStatus(null), 3000);
+      }, 1500);
+    }
+  }, [addLog]);
 
   const mintBadge = useCallback(async (address: string) => {
     console.log(`[INK!] Requesting Soulbound Badge for ${address}`);
     
-    // 1. Check Runtime Seal for eligibility (Efficiency > 98% for 100 blocks)
-    const seal = await portaldot.fetchRuntimeSeal(address);
-    if (!seal.data.is_verified || seal.data.efficiency_score < 9800 || seal.data.blocks_consistent < 100) {
-      alert(`INELIGIBLE: Sustainability Seal requires >98% efficiency for 100 blocks. Current: ${seal.data.efficiency_score/100}%`);
-      return;
-    }
+    try {
+      // 1. Check Runtime Seal for eligibility (Efficiency > 98% for 100 blocks)
+      const seal = await portaldot.fetchRuntimeSeal(address);
+      if (!seal.data.is_verified || seal.data.efficiency_score < 9800 || seal.data.blocks_consistent < 100) {
+        addLog(`INELIGIBLE: Sustainability Seal requires >98% efficiency.`, 'ERROR');
+        return;
+      }
 
-    const result = await portaldot.mintSoulbound(address);
-    // Refresh attestation to reflect new badge
-    const att = await portaldot.fetchAttestation(address);
-    setAttestation(att);
-    return result;
+      const result = await portaldot.mintSoulbound(address);
+      // Refresh attestation to reflect new badge
+      const att = await portaldot.fetchAttestation(address);
+      setAttestation(att);
+      return result;
+    } catch (err) {
+      console.error('[API] Minting failed:', err);
+      setIsDemoMode(true);
+      addLog('[SYSTEM] Smart Contract Minting failed. Switching to local issuance.', 'WARN');
+      setToast('Issued Local Green Badge (Demo Mode)');
+      setTimeout(() => setToast(null), 3000);
+    }
+  }, [addLog]);
+
+  const refreshOracle = useCallback(async (region: string) => {
+    try {
+      const oracle = await portaldot.fetchCarbonOracle(region);
+      setOracleData(oracle);
+    } catch (err) {
+      console.error('[API] Oracle refresh failed:', err);
+      setIsDemoMode(true);
+    }
   }, []);
 
   return {
@@ -390,6 +466,7 @@ export function useSentinelData() {
       govStatus,
       isStressTesting,
       isSpiking,
+      isDemoMode,
       toast,
       oracleData,
       carbonStats,
@@ -404,7 +481,7 @@ export function useSentinelData() {
       runAudit,
       mintBadge,
       setStressTest: setIsStressTesting,
-      refreshOracle: (region: string) => portaldot.fetchCarbonOracle(region).then(setOracleData)
+      refreshOracle
     }
   };
 }

@@ -31,12 +31,55 @@ export interface BatchHistory {
 
 class PortaldotSDK {
   private currentBlock = 104230;
+  private baseUrl = (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL) || 
+                   ((import.meta as any).env?.VITE_API_URL) || '';
 
   constructor() {
     // Start block simulation
     setInterval(() => {
       this.currentBlock++;
     }, 6000); // New block every 6 seconds approx
+  }
+
+  private async safeFetch(endpoint: string, options: RequestInit = {}) {
+    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+    
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Accept': 'application/json',
+          ...options.headers,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`API_ERROR: ${res.status} ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('API_ERROR: Invalid Content-Type, expected application/json');
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      console.error(`[SDK] Fetch failed for ${endpoint}:`, err.message);
+      throw err; // Re-throw to be caught by the hook for Silent Demo switch
+    }
+  }
+
+  // New FastAPI Wrapper endpoints
+  async fetchStats(identifier: string) {
+    return this.safeFetch(`/api/stats?identifier=${identifier}`);
+  }
+
+  async triggerFlag(target_account: string) {
+    return this.safeFetch('/api/trigger-flag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_account })
+    });
   }
 
   getCurrentBlock() {
@@ -107,41 +150,35 @@ class PortaldotSDK {
    * Connection to the Bridge
    */
   async submitBatch(remarks: string[]) {
-    const res = await fetch('/api/batch', {
+    return this.safeFetch('/api/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ remarks })
     });
-    return res.json();
   }
 
   async fetchHistory() {
-    const res = await fetch('/api/history');
-    return res.json();
+    return this.safeFetch('/api/history');
   }
 
   async fetchFatigue() {
-    const res = await fetch('/api/fatigue');
-    return res.json();
+    return this.safeFetch('/api/fatigue');
   }
 
   async performAudit(query: string) {
-    const res = await fetch(`/api/audit/${query}`);
-    return res.json();
+    return this.safeFetch(`/api/audit/${query}`);
   }
 
   async fetchAttestation(idOrAddress: string) {
-    const res = await fetch(`/api/attestation/${idOrAddress}`);
-    return res.json();
+    return this.safeFetch(`/api/attestation/${idOrAddress}`);
   }
 
   async triggerMultisig(call: any) {
-    const res = await fetch('/api/multisig', {
+    return this.safeFetch('/api/multisig', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ call, threshold: 2 })
     });
-    return res.json();
   }
 
   /**
@@ -149,31 +186,27 @@ class PortaldotSDK {
    */
 
   async fetchCarbonOracle(region: string = 'europe-west2') {
-    const res = await fetch(`/api/carbon-oracle?region=${region}`);
-    return res.json();
+    return this.safeFetch(`/api/carbon-oracle?region=${region}`);
   }
 
   async fetchRuntimeSeal(address: string) {
-    const res = await fetch(`/api/runtime/seal/${address}`);
-    return res.json();
+    return this.safeFetch(`/api/runtime/seal/${address}`);
   }
 
   async proposeGovernance(call: any, proposer: string) {
-    const res = await fetch('/api/democracy/propose', {
+    return this.safeFetch('/api/democracy/propose', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ call, proposer })
     });
-    return res.json();
   }
 
   async mintSoulbound(recipient: string) {
-    const res = await fetch('/api/mint-soulbound', {
+    return this.safeFetch('/api/mint-soulbound', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recipient })
     });
-    return res.json();
   }
 
   /**
