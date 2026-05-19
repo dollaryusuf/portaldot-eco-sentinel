@@ -14,9 +14,8 @@ app = FastAPI(title="Portaldot Eco-Sentinel API")
 
 # Portaldot Initialization
 portaldot = SubstrateInterface(
-    url="wss://mainnet.portaldot.io",
-    ss58_format=42,
-    type_registry_preset='default'
+    url="wss://rpc.portaldot.network",
+    ss58_format=42
 )
 
 # Configure CORS
